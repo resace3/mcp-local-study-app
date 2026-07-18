@@ -1,0 +1,1 @@
+$p = Join-Path ${env:LOCALAPPDATA} 'local-study-app\server.pid'; if (Test-Path $p) { & "$PSScriptRoot\stop.ps1" }; Write-Host 'Code remains installed; remove the project directory manually if desired.'
