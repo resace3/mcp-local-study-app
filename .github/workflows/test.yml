@@ -1,11 +1,37 @@
 name: test
 on: [push, pull_request]
 jobs:
-  test:
+  unit-and-mcp:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '${{ matrix.python-version }}'}
+      - run: python -m pip install -e . pytest httpx
+      - run: python -m compileall -q local_study_app
+      - run: pytest -q --ignore=tests/test_browser.py
+      - name: MCP schema smoke test
+        run: python -c "from local_study_app.mcp_server import TOOLS; assert len(TOOLS) >= 40; assert all(t.get('inputSchema', {}).get('type') == 'object' for t in TOOLS)"
+
+  browser:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: pip install -e . pytest
-      - run: pytest -q
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m playwright install --with-deps chromium
+      - run: pytest -q tests/test_browser.py
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
