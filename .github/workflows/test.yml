@@ -15,7 +15,7 @@ jobs:
       - run: python -m compileall -q local_study_app
       - run: pytest -q --ignore=tests/test_browser.py
       - name: MCP schema smoke test
-        run: python -c "from local_study_app.mcp_server import TOOLS; assert len(TOOLS) >= 40; assert all(t.get('inputSchema', {}).get('type') == 'object' for t in TOOLS)"
+        run: python -c "from local_study_app.mcp_server import TOOLS; assert len(TOOLS) >= 40; assert all(t.get('inputSchema', {}).get('type') == 'object' for t in TOOLS.values())"
 
   browser:
     runs-on: ubuntu-latest
