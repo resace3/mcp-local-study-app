@@ -121,35 +121,90 @@ function showCombine(){
 async function renderDeck(deckId){
   const [deck,cards,folders]=await Promise.all([api(`/api/decks/${deckId}`),api(`/api/decks/${deckId}/cards`),api('/api/folders')]); state.activeDeck=deck;state.cards=cards;state.folders=folders;
   const pct=deck.card_count?Math.round(deck.mastered_count/deck.card_count*100):0;
-  app.innerHTML=`<section class="deck-header"><div><button class="ghost compact" id="back-library">← Library</button><p class="eyebrow" style="margin-top:22px">${deck.card_count} cards · ${pct}% mastered</p><h1>${esc(deck.title)}</h1><p class="muted">${esc(deck.description||'Add a description to remember what this deck is for.')}</p></div><div class="actions"><button class="secondary" id="edit-deck">Edit details</button><button class="secondary" id="duplicate-deck">Duplicate</button><button class="ghost" id="print-deck">Print</button><button class="danger" id="delete-deck">Delete</button></div></section>
+  app.innerHTML=`<section class="deck-header"><div><button class="ghost compact" id="back-library">← Library</button><p class="eyebrow" id="deck-card-count" style="margin-top:22px">${deck.card_count} cards · ${pct}% mastered</p><h1>${esc(deck.title)}</h1><p class="muted">${esc(deck.description||'Add a description to remember what this deck is for.')}</p></div><div class="actions"><button class="secondary" id="edit-deck">Edit details</button><button class="secondary" id="duplicate-deck">Duplicate</button><button class="ghost" id="print-deck">Print</button><button class="danger" id="delete-deck">Delete</button></div></section>
     <section class="mode-grid" aria-label="Study modes">${['flashcards','learn','write','spell','test','match'].map(mode=>`<button class="mode" data-mode="${mode}"><span>${icons[mode]}</span>${mode[0].toUpperCase()+mode.slice(1)}</button>`).join('')}</section>
-    <section class="panel"><div class="section-head" style="margin-top:0"><div><p class="eyebrow">Cards</p><h2>Terms and definitions</h2></div><button class="primary" id="add-card">＋ Add card</button></div><div class="toolbar"><input id="card-search" class="search" type="search" placeholder="Search this deck…"><button class="secondary" id="import-cards">Import</button><select id="export-format" class="search" style="max-width:130px"><option value="json">JSON</option><option value="csv">CSV</option><option value="text">Text</option></select><button class="secondary" id="export-cards">Export</button></div><div id="card-list" class="card-list">${renderCardRows(cards)}</div></section>`;
+    <section class="panel card-editor-panel"><div class="section-head" style="margin-top:0"><div><p class="eyebrow">Cards</p><h2>Front and back</h2><p class="muted">Type directly into each row. Changes save automatically.</p></div></div><div class="toolbar"><input id="card-search" class="search" type="search" placeholder="Search this deck…"><button class="secondary" id="import-cards">Import</button><select id="export-format" class="search" style="max-width:130px"><option value="json">JSON</option><option value="csv">CSV</option><option value="text">Text</option></select><button class="secondary" id="export-cards">Export</button></div><div id="card-list" class="card-list">${renderCardRows(cards)}</div><div class="add-card-row"><button class="secondary" id="add-card">＋ Add card</button></div></section>`;
   document.querySelector('#back-library').onclick=()=>route('library'); document.querySelectorAll('[data-mode]').forEach(x=>x.onclick=()=>route(`${x.dataset.mode}/${deckId}`));
-  document.querySelector('#add-card').onclick=()=>showCardEditor(deckId); document.querySelector('#edit-deck').onclick=showEditDeck; document.querySelector('#duplicate-deck').onclick=duplicateActiveDeck; document.querySelector('#delete-deck').onclick=deleteActiveDeck; document.querySelector('#print-deck').onclick=()=>window.print();
+  document.querySelector('#add-card').onclick=addDraftCard; document.querySelector('#edit-deck').onclick=showEditDeck; document.querySelector('#duplicate-deck').onclick=duplicateActiveDeck; document.querySelector('#delete-deck').onclick=deleteActiveDeck; document.querySelector('#print-deck').onclick=()=>window.print();
   document.querySelector('#import-cards').onclick=()=>showImport(deckId); document.querySelector('#export-cards').onclick=exportActiveDeck;
   let timer; document.querySelector('#card-search').oninput=event=>{clearTimeout(timer);timer=setTimeout(async()=>{const cards=await api(`/api/decks/${deckId}/cards?q=${encodeURIComponent(event.target.value)}`);document.querySelector('#card-list').innerHTML=renderCardRows(cards);bindCardRows()},160)};
   bindCardRows();
 }
 
-function renderCardRows(cards){ return cards.length?cards.map((card,index)=>`<article class="card-row" data-card="${card.id}"><button class="star ${card.starred?'on':''}" aria-label="${card.starred?'Unstar':'Star'} card">★</button><div><div class="term">${esc(card.front)}</div><small class="muted">${esc(card.tags||card.kind.replace('_',' '))}</small></div><div class="definition">${esc(card.back)}</div><div class="row-actions"><button class="icon-button up" aria-label="Move up" ${index===0?'disabled':''}>↑</button><button class="icon-button down" aria-label="Move down" ${index===cards.length-1?'disabled':''}>↓</button><button class="icon-button edit" aria-label="Edit card">✎</button><button class="icon-button remove" aria-label="Delete card">×</button></div></article>`).join(''):emptyInline('No cards yet','Add a term and definition to unlock study modes.'); }
+function renderCardRows(cards){
+  if(!cards.length)return '<div class="card-editor-empty">No cards yet. Add your first front and back below.</div>';
+  return cards.map(card=>renderCardEditorRow(card,state.cards.findIndex(item=>item.id===card.id))).join('');
+}
+
+function renderCardEditorRow(card,index,isDraft=false){
+  const number=index+1;
+  return `<article class="card-editor-row${isDraft?' is-draft':''}" data-card="${card?.id||''}"><header class="card-row-head"><strong class="card-number">${number}</strong><span class="save-state" aria-live="polite">${isDraft?'Add both sides to save':'Saved'}</span><div class="row-actions"><button class="drag-handle" type="button" draggable="${isDraft?'false':'true'}" aria-label="Reorder card ${number}" title="Drag to reorder">☰</button><button class="row-delete" type="button" aria-label="Delete card ${number}" title="Delete card">⌫</button></div></header><div class="inline-card-field"><textarea rows="2" aria-label="Front" placeholder="Enter the front">${esc(card?.front||'')}</textarea><label>Front</label></div><div class="inline-card-field"><textarea rows="2" aria-label="Back" placeholder="Enter the back">${esc(card?.back||'')}</textarea><label>Back</label></div></article>`;
+}
+
+function setCardRowStatus(row,message,error=false){const status=row.querySelector('.save-state');status.textContent=message;status.classList.toggle('error',error)}
+function resizeCardField(field){field.style.height='auto';field.style.height=`${Math.max(58,field.scrollHeight)}px`}
+function refreshCardCount(){
+  state.activeDeck.card_count=state.cards.length;
+  const label=document.querySelector('#deck-card-count');
+  if(label){const pct=state.cards.length?Math.round((state.activeDeck.mastered_count||0)/state.cards.length*100):0;label.textContent=`${state.cards.length} cards · ${pct}% mastered`}
+}
+
+function addDraftCard(){
+  const search=document.querySelector('#card-search');
+  if(search.value){search.value='';document.querySelector('#card-list').innerHTML=renderCardRows(state.cards);bindCardRows()}
+  let row=document.querySelector('.card-editor-row.is-draft');
+  if(!row){const list=document.querySelector('#card-list');list.querySelector('.card-editor-empty')?.remove();list.insertAdjacentHTML('beforeend',renderCardEditorRow(null,state.cards.length,true));row=list.lastElementChild;bindCardRows()}
+  ([...row.querySelectorAll('textarea')].find(field=>!field.value.trim())||row.querySelector('textarea')).focus();
+  row.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+async function saveCardRow(row){
+  clearTimeout(row.saveTimer);
+  const fields=row.querySelectorAll('textarea');
+  const front=fields[0].value.trim(),back=fields[1].value.trim();
+  if(!front||!back){setCardRowStatus(row,`${front?'Back':'Front'} required`);return}
+  if(row.dataset.saving==='true'){row.dataset.pending='true';return}
+  row.dataset.saving='true';row.dataset.pending='';setCardRowStatus(row,'Saving…');
+  try{
+    const id=Number(row.dataset.card);
+    const saved=id?await api(`/api/cards/${id}`,{method:'PATCH',body:JSON.stringify({front,back})}):await api('/api/cards',{method:'POST',body:JSON.stringify({deck_id:state.activeDeck.id,front,back})});
+    if(id){const card=state.cards.find(item=>item.id===id);if(card)Object.assign(card,saved)}else if(row.dataset.discarded==='true'){await api(`/api/cards/${saved.id}`,{method:'DELETE'});return}else{state.cards.push(saved);row.dataset.card=saved.id;row.classList.remove('is-draft');const handle=row.querySelector('.drag-handle');handle.draggable=true;refreshCardCount()}
+    setCardRowStatus(row,'Saved');
+    if(fields[0].value.trim()!==front||fields[1].value.trim()!==back)row.dataset.pending='true';
+  }catch(error){setCardRowStatus(row,'Could not save',true);toast(error.message,true)}finally{
+    row.dataset.saving='false';
+    if(row.dataset.pending==='true'){row.dataset.pending='';row.saveTimer=setTimeout(()=>saveCardRow(row),100)}
+  }
+}
 
 function bindCardRows(){
-  document.querySelectorAll('.card-row').forEach(row=>{
-    const id=Number(row.dataset.card); const card=state.cards.find(x=>x.id===id);
-    row.querySelector('.star').onclick=async()=>{await api(`/api/cards/${id}/star`,{method:'POST',body:JSON.stringify({starred:!card.starred})});card.starred=!card.starred;row.querySelector('.star').classList.toggle('on',card.starred);toast(card.starred?'Card starred':'Card unstarred')};
-    row.querySelector('.edit').onclick=()=>showCardEditor(state.activeDeck.id,card);
-    row.querySelector('.remove').onclick=async()=>{if(!confirm('Delete this card?'))return;await api(`/api/cards/${id}`,{method:'DELETE'});state.cards=state.cards.filter(x=>x.id!==id);row.remove();toast('Card deleted')};
-    row.querySelector('.up').onclick=()=>moveCard(id,-1); row.querySelector('.down').onclick=()=>moveCard(id,1);
+  document.querySelectorAll('.card-editor-row').forEach(row=>{
+    if(row.dataset.bound==='true')return;row.dataset.bound='true';
+    row.querySelectorAll('textarea').forEach(field=>{
+      resizeCardField(field);
+      field.addEventListener('input',()=>{resizeCardField(field);setCardRowStatus(row,'Unsaved');clearTimeout(row.saveTimer);row.saveTimer=setTimeout(()=>saveCardRow(row),650)});
+      field.addEventListener('blur',()=>{if(row.saveTimer)saveCardRow(row)});
+      field.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();saveCardRow(row).then(addDraftCard)}});
+    });
+    row.querySelector('.row-delete').onclick=async()=>{
+      const id=Number(row.dataset.card);
+      if(!id){row.dataset.discarded='true';clearTimeout(row.saveTimer);row.remove();if(!state.cards.length)document.querySelector('#card-list').innerHTML=renderCardRows([]);return}
+      if(!confirm('Delete this card?'))return;
+      try{await api(`/api/cards/${id}`,{method:'DELETE'});state.cards=state.cards.filter(card=>card.id!==id);document.querySelector('#card-list').innerHTML=renderCardRows(state.cards);bindCardRows();refreshCardCount();toast('Card deleted')}catch(error){toast(error.message,true)}
+    };
+    const handle=row.querySelector('.drag-handle');
+    handle.ondragstart=event=>{const id=Number(row.dataset.card);if(!id){event.preventDefault();return}event.dataTransfer.setData('text/plain',String(id));event.dataTransfer.effectAllowed='move';row.classList.add('dragging')};
+    handle.ondragend=()=>{row.classList.remove('dragging');document.querySelectorAll('.drag-over').forEach(item=>item.classList.remove('drag-over'))};
+    handle.onkeydown=event=>{if(!event.altKey||!['ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();moveCard(Number(row.dataset.card),event.key==='ArrowUp'?-1:1)};
+    row.ondragover=event=>{if(event.dataTransfer.types.includes('text/plain')){event.preventDefault();row.classList.add('drag-over')}};
+    row.ondragleave=()=>row.classList.remove('drag-over');
+    row.ondrop=event=>{event.preventDefault();row.classList.remove('drag-over');reorderCard(Number(event.dataTransfer.getData('text/plain')),Number(row.dataset.card))};
   });
 }
 
-async function moveCard(id,delta){const index=state.cards.findIndex(x=>x.id===id);const target=index+delta;if(target<0||target>=state.cards.length)return;[state.cards[index],state.cards[target]]=[state.cards[target],state.cards[index]];await api(`/api/decks/${state.activeDeck.id}/reorder`,{method:'POST',body:JSON.stringify({card_ids:state.cards.map(x=>x.id)})});document.querySelector('#card-list').innerHTML=renderCardRows(state.cards);bindCardRows();}
-
-function showCardEditor(deckId,card=null){
-  const c=card||{};
-  openModal(`<p class="eyebrow">${card?'Edit card':'New card'}</p><h2>${card?'Polish this card':'Add something to learn'}</h2><form id="card-form"><div class="two-col"><div class="field"><label>Term or question</label><textarea name="front" required>${esc(c.front||'')}</textarea></div><div class="field"><label>Definition or answer</label><textarea name="back" required>${esc(c.back||'')}</textarea></div></div><div class="two-col"><div class="field"><label>Hint</label><input name="hint" value="${esc(c.hint||'')}"></div><div class="field"><label>Tags</label><input name="tags" value="${esc(c.tags||'')}" placeholder="biology, chapter-2"></div></div><div class="two-col"><div class="field"><label>Question type</label><select name="kind"><option value="written">Written</option><option value="multiple_choice" ${c.kind==='multiple_choice'?'selected':''}>Multiple choice</option><option value="true_false" ${c.kind==='true_false'?'selected':''}>True / false</option></select></div><div class="field"><label>Answer options (one per line)</label><textarea name="options">${esc((c.options||[]).join('\n'))}</textarea></div></div><div class="field"><label>Alternate accepted answers (one per line)</label><textarea name="alternate_answers">${esc((c.alternate_answers||[]).join('\n'))}</textarea></div><div class="field"><label>Explanation</label><textarea name="explanation">${esc(c.explanation||'')}</textarea></div><div class="field"><label>Definition image (optional, 5 MB max)</label><input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif"></div><button class="primary">${card?'Save changes':'Add card'}</button></form>`);
-  document.querySelector('#card-form').onsubmit=async event=>{event.preventDefault();try{const raw=formData(event.target);let imagePath=c.image_path||'';const file=event.target.image.files[0];if(file){const upload=new FormData();upload.append('file',file);const media=await api('/api/media',{method:'POST',body:upload});imagePath=media.image_path}const payload={front:raw.front,back:raw.back,hint:raw.hint,tags:raw.tags,kind:raw.kind,options:parseList(raw.options),alternate_answers:parseList(raw.alternate_answers),explanation:raw.explanation,image_path:imagePath};if(card)await api(`/api/cards/${card.id}`,{method:'PATCH',body:JSON.stringify(payload)});else await api('/api/cards',{method:'POST',body:JSON.stringify({...payload,deck_id:deckId})});closeModal();toast(card?'Card saved':'Card added');await renderDeck(deckId)}catch(error){toast(error.message,true)}};
-}
+async function persistCardOrder(){await api(`/api/decks/${state.activeDeck.id}/reorder`,{method:'POST',body:JSON.stringify({card_ids:state.cards.map(card=>card.id)})});document.querySelector('#card-list').innerHTML=renderCardRows(state.cards);bindCardRows()}
+async function moveCard(id,delta){const index=state.cards.findIndex(card=>card.id===id),target=index+delta;if(index<0||target<0||target>=state.cards.length)return;[state.cards[index],state.cards[target]]=[state.cards[target],state.cards[index]];try{await persistCardOrder()}catch(error){toast(error.message,true);renderDeck(state.activeDeck.id)}}
+async function reorderCard(id,targetId){if(!id||!targetId||id===targetId)return;const from=state.cards.findIndex(card=>card.id===id);let to=state.cards.findIndex(card=>card.id===targetId);if(from<0||to<0)return;const [card]=state.cards.splice(from,1);if(from<to)to-=1;state.cards.splice(to,0,card);try{await persistCardOrder()}catch(error){toast(error.message,true);renderDeck(state.activeDeck.id)}}
 
 function showEditDeck(){const d=state.activeDeck;openModal(`<p class="eyebrow">Deck details</p><h2>Edit your deck</h2><form id="edit-deck-form"><div class="field"><label>Title</label><input name="title" required value="${esc(d.title)}"></div><div class="field"><label>Description</label><textarea name="description">${esc(d.description)}</textarea></div><div class="two-col"><div class="field"><label>Term language</label>${languageSelect('term_language',d.term_language)}</div><div class="field"><label>Definition language</label>${languageSelect('definition_language',d.definition_language)}</div></div><div class="field"><label>Folders</label>${state.folders.map(f=>`<label><input type="checkbox" name="folder" value="${f.id}" ${d.folder_ids.includes(f.id)?'checked':''}> ${esc(f.title)}</label>`).join('')||'<span class="muted">Create a folder from the Folders page.</span>'}</div><button class="primary">Save deck</button></form>`);document.querySelector('#edit-deck-form').onsubmit=async event=>{event.preventDefault();try{const data=formData(event.target);await api(`/api/decks/${d.id}`,{method:'PATCH',body:JSON.stringify({title:data.title,description:data.description,term_language:data.term_language,definition_language:data.definition_language})});const chosen=[...event.target.querySelectorAll('[name=folder]:checked')].map(x=>Number(x.value));for(const folder of state.folders)await api(`/api/folders/${folder.id}/decks`,{method:'POST',body:JSON.stringify({deck_id:d.id,included:chosen.includes(folder.id)})});closeModal();toast('Deck saved');renderDeck(d.id)}catch(error){toast(error.message,true)}}}
 

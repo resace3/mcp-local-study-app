@@ -24,7 +24,7 @@ The Python suite verifies:
 - REST success and validation-error envelopes;
 - all MCP input schemas, representative success/failure calls, unknown tools, lifecycle idempotence, and stale/unowned PID protection.
 
-The Chromium suite verifies a real rendered application through deck creation, an empty mode, six-card study content, Flashcards, Learn refresh resume, Write, Spell, Test, Match, Progress, desktop layout, tablet layout, exact 390 CSS-pixel layout, touch-sized mobile navigation, overflow, and page errors.
+The Chromium suite verifies a real rendered application through deck creation, inline Front/Back card entry and autosave persistence, an empty mode, six-card study content, Flashcards, Learn refresh resume, Write, Spell, Test, Match, Progress, desktop layout, tablet layout, exact 390 CSS-pixel layout, touch-sized mobile navigation, overflow, and page errors.
 
 ## Manual Chrome pass
 

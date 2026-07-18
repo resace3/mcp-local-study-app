@@ -79,13 +79,23 @@ def test_visible_modes_resume_and_responsive_layout(browser_app):
         page.get_by_role("button", name="▣ Flashcards").click()
         expect(page.get_by_role("heading", name="No cards to review")).to_be_visible()
 
-        for index in range(6):
+        page.goto(browser_app + "#deck/%d" % deck_id)
+        page.get_by_role("button", name="＋ Add card").click()
+        inline_row = page.locator(".card-editor-row").last
+        inline_row.get_by_label("Front", exact=True).fill("Inline term")
+        inline_row.get_by_label("Back", exact=True).fill("Inline answer")
+        expect(inline_row.locator(".save-state")).to_have_text("Saved", timeout=5000)
+        page.reload()
+        expect(page.locator(".card-editor-row").first.get_by_label("Front", exact=True)).to_have_value("Inline term")
+        expect(page.locator(".card-editor-row").first.get_by_label("Back", exact=True)).to_have_value("Inline answer")
+
+        for index in range(5):
             result = _request(
                 browser_app + "api/cards",
                 {"deck_id": deck_id, "front": "Term %d" % index, "back": "Answer %d" % index},
             )
             assert result["success"]
-        page.goto(browser_app + "#deck/%d" % deck_id)
+        page.reload()
         expect(page.get_by_text("6 cards · 0% mastered")).to_be_visible()
 
         page.get_by_role("button", name="▣ Flashcards").click()
@@ -124,6 +134,9 @@ def test_visible_modes_resume_and_responsive_layout(browser_app):
             page.set_viewport_size({"width": width, "height": height})
             page.goto(browser_app + "#dashboard")
             assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        page.goto(browser_app + "#deck/%d" % deck_id)
+        assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        expect(page.locator(".card-editor-row").first.get_by_label("Front", exact=True)).to_be_visible()
         for name in ("Home", "Library", "Folders", "Progress"):
             assert page.get_by_role("button", name=name, exact=True).bounding_box()["height"] >= 44
         browser.close()
