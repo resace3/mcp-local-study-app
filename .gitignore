@@ -6,3 +6,4 @@ __pycache__/
 *.log
 .study-app.json
 dist/
+local_study_app.egg-info/

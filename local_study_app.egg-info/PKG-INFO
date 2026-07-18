@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: local-study-app
-Version: 1.0.0
-Requires-Python: >=3.9
-License-File: LICENSE
-Requires-Dist: fastapi>=0.110
-Requires-Dist: uvicorn>=0.29
-Requires-Dist: pydantic>=2
-Dynamic: license-file
