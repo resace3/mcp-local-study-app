@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#6658d3">
+  <title>Study Sprout</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#app">Skip to content</a>
+  <header class="topbar">
+    <button class="brand" data-route="dashboard" aria-label="Study Sprout dashboard"><span class="brand-mark">S</span><span>Study Sprout</span></button>
+    <nav aria-label="Primary navigation">
+      <button data-route="dashboard">Home</button>
+      <button data-route="library">Library</button>
+      <button data-route="folders">Folders</button>
+      <button data-route="progress">Progress</button>
+    </nav>
+    <button class="primary compact" id="quick-create">＋ Create</button>
+  </header>
+  <main id="app" tabindex="-1"><div class="loading"><span></span><p>Growing your study space…</p></div></main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="modal"><div class="modal-shell"><button class="icon-button modal-close" type="button" aria-label="Close">×</button><div id="modal-content"></div></div></dialog>
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

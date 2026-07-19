@@ -1,43 +1,260 @@
+"""FastAPI application and typed local REST API."""
 import os
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
-from . import service
-from .db import conn
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-app = FastAPI(title='Local Study App', version='1.0.0')
-class DeckIn(BaseModel): title: str; description: str = ''
-class CardIn(BaseModel):
-    deck_id: int; front: str; back: str; hint: str = ''; tags: str = ''; english: str = ''; spanish: str = ''; kind: str = 'written'; options: list = []; explanation: str = ''
-class ReviewIn(BaseModel): card_id: int; rating: str
+from fastapi import Body, FastAPI, File, Query, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
-@app.get('/api/health')
+from . import __version__, service
+from .db import DB, EXPORTS, MEDIA, conn
+
+STATIC = Path(__file__).parent / "static"
+app = FastAPI(title="Study Sprout", version=__version__, docs_url="/api/docs", redoc_url=None)
+
+
+class DeckInput(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=2000)
+    term_language: str = "auto"
+    definition_language: str = "auto"
+    draft: bool = False
+
+
+class DeckUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=160)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    term_language: Optional[str] = None
+    definition_language: Optional[str] = None
+    draft: Optional[bool] = None
+
+
+class CardInput(BaseModel):
+    deck_id: int
+    front: str = Field(min_length=1, max_length=5000)
+    back: str = Field(min_length=1, max_length=5000)
+    hint: str = Field(default="", max_length=2000)
+    tags: str = Field(default="", max_length=500)
+    english: str = Field(default="", max_length=5000)
+    spanish: str = Field(default="", max_length=5000)
+    kind: str = "written"
+    options: List[str] = []
+    explanation: str = Field(default="", max_length=5000)
+    alternate_answers: List[str] = []
+    term_language: str = "auto"
+    definition_language: str = "auto"
+    image_path: str = ""
+    starred: bool = False
+
+
+class BulkCards(BaseModel):
+    deck_id: int
+    cards: List[Dict[str, Any]]
+
+
+class CardUpdate(BaseModel):
+    front: Optional[str] = None
+    back: Optional[str] = None
+    hint: Optional[str] = None
+    tags: Optional[str] = None
+    english: Optional[str] = None
+    spanish: Optional[str] = None
+    kind: Optional[str] = None
+    options: Optional[List[str]] = None
+    explanation: Optional[str] = None
+    alternate_answers: Optional[List[str]] = None
+    term_language: Optional[str] = None
+    definition_language: Optional[str] = None
+    image_path: Optional[str] = None
+    starred: Optional[bool] = None
+    position: Optional[int] = None
+
+
+class ReviewInput(BaseModel):
+    card_id: int
+    rating: str
+    session_id: Optional[int] = None
+
+
+class FolderInput(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=1000)
+
+
+class FolderUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+
+
+class FolderDeckInput(BaseModel):
+    deck_id: int
+    included: bool = True
+
+
+class CombineInput(BaseModel):
+    deck_ids: List[int]
+    title: Optional[str] = None
+    persist: bool = True
+
+
+class SessionInput(BaseModel):
+    deck_id: int
+    mode: str = "learn"
+    options: Dict[str, Any] = {}
+
+
+class SessionAnswer(BaseModel):
+    response: str = ""
+    card_id: Optional[int] = None
+    override: bool = False
+    elapsed_ms: int = 0
+
+
+class QuizInput(BaseModel):
+    deck_id: int
+    limit: int = Field(default=10, ge=1, le=100)
+    types: List[str] = ["multiple_choice", "true_false", "written"]
+    starred_only: bool = False
+
+
+class QuizSubmit(BaseModel):
+    answers: Dict[str, str]
+    grading: str = "strict"
+
+
+class MatchInput(BaseModel):
+    deck_id: int
+    elapsed_ms: int = Field(gt=0)
+    mistakes: int = Field(default=0, ge=0)
+
+
+class ImportInput(BaseModel):
+    payload: str
+    format: str = "json"
+    title: Optional[str] = None
+    term_separator: Optional[str] = None
+    row_separator: Optional[str] = None
+
+
+@app.get("/api/health")
 def health():
-    try: conn().execute('select 1'); db='ok'
-    except Exception: db='error'
-    return {'status':'ok','version':'1.0.0','database':db,'frontend':'ok'}
-@app.get('/api/decks')
-def decks(): return service.list_decks()
-@app.post('/api/decks')
-def create_deck(x: DeckIn): return service.create_deck(x.title, x.description)
-@app.get('/api/decks/{did}/cards')
-def cards(did: int, q: str = ''): return service.list_cards(did, q)
-@app.post('/api/cards')
-def create_card(x: CardIn): return service.create_card(**x.model_dump())
-@app.post('/api/reviews')
-def reviews(x: ReviewIn): return service.review(x.card_id, x.rating)
-@app.get('/api/progress')
-def progress(): return service.progress()
-@app.get('/api/due')
-def due(): return service.due()
-@app.get('/', response_class=HTMLResponse)
-def home(): return HTML
+    try:
+        conn().execute("SELECT 1").fetchone()
+        database = "ok"
+    except Exception:
+        database = "error"
+    return {"status": "ok" if database == "ok" else "degraded", "version": __version__, "database": database, "database_path": str(DB), "frontend": "ok" if (STATIC / "index.html").exists() else "missing", "local_time": service.utcnow() if hasattr(service, "utcnow") else "", "pid": os.getpid(), "instance_token": os.getenv("STUDY_INSTANCE_TOKEN", "")}
 
-HTML = '''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Study Sprout</title><style>
-:root{--ink:#24334b;--blue:#5b7cfa;--mint:#a8e6cf;--cream:#fffaf2}*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font:16px system-ui,sans-serif}header{background:#fff;padding:20px 5%;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 10px #24334b12}h1{margin:0;color:var(--blue)}main{max-width:1100px;margin:28px auto;padding:0 20px}.hero{background:linear-gradient(135deg,#e6edff,#fff);border-radius:24px;padding:28px;display:flex;justify-content:space-between;gap:20px}.stats,.decks{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:20px 0}.stat,.deck{background:white;border-radius:18px;padding:20px;box-shadow:0 5px 18px #24334b12}.stat b{display:block;font-size:32px;color:var(--blue)}button{border:0;border-radius:12px;padding:12px 18px;background:var(--blue);color:white;font-weight:700;cursor:pointer;margin:4px}.secondary{background:#e8edff;color:var(--blue)}.pill{display:inline-block;background:var(--mint);padding:5px 10px;border-radius:99px;font-size:12px}@media(max-width:500px){.hero{display:block}.hero button{width:100%;margin-top:12px}}
-</style></head><body><header><h1>🌱 Study Sprout</h1><span>Local • private • yours</span></header><main><section class="hero"><div><h2>Grow your knowledge, one card at a time.</h2><p>Friendly flashcards, quizzes, and progress tracking that stay on this computer.</p></div><button onclick="newDeck()">＋ New deck</button></section><section class="stats"><div class="stat"><b id="decks">0</b>Decks</div><div class="stat"><b id="cards">0</b>Total cards</div><div class="stat"><b id="due">0</b>Due today</div><div class="stat"><b id="mastered">0</b>Mastered</div></section><h2>Your decks</h2><div id="list" class="decks"></div><section class="stat"><h2>Quick study</h2><p id="message">Choose a deck to see its cards.</p><div id="cardsView"></div></section></main><script>
-async function api(u,o){let r=await fetch(u,o);return r.json()}async function load(){let d=await api('/api/decks'),p=await api('/api/progress');document.querySelector('#decks').textContent=d.data.length;document.querySelector('#cards').textContent=p.data.total_cards;document.querySelector('#due').textContent=p.data.due;document.querySelector('#mastered').textContent=p.data.mastered;document.querySelector('#list').innerHTML=d.data.map(x=>`<article class="deck"><span class="pill">${x.card_count} cards</span><h3>${esc(x.title)}</h3><p>${esc(x.description||'Ready to study')}</p><button onclick="show(${x.id},'${esc(x.title)}')">Study deck</button></article>`).join('')}function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}async function show(id,title){let r=await api('/api/decks/'+id+'/cards');document.querySelector('#message').textContent=title+' • '+r.data.length+' cards';document.querySelector('#cardsView').innerHTML=r.data.slice(0,5).map(x=>`<p><b>${esc(x.front)}</b> — ${esc(x.back)} <button class="secondary" onclick="review(${x.id})">Good</button></p>`).join('')}async function review(id){await api('/api/reviews',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_id:id,rating:'good'})});load()}async function newDeck(){let t=prompt('Deck title');if(t){let r=await api('/api/decks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t})});if(!r.success)alert(r.error.message);load()}}load();</script></body></html>'''
 
-if __name__ == '__main__':
+@app.get("/api/decks")
+def decks(q: str = "", folder_id: Optional[int] = None): return service.list_decks(q, folder_id)
+@app.post("/api/decks")
+def create_deck(value: DeckInput): return service.create_deck(**value.model_dump())
+@app.get("/api/decks/{deck_id}")
+def get_deck(deck_id: int): return service.get_deck(deck_id)
+@app.patch("/api/decks/{deck_id}")
+def update_deck(deck_id: int, value: DeckUpdate): return service.update_deck(deck_id, **value.model_dump())
+@app.delete("/api/decks/{deck_id}")
+def delete_deck(deck_id: int): return service.delete_deck(deck_id)
+@app.post("/api/decks/{deck_id}/duplicate")
+def duplicate_deck(deck_id: int, title: Optional[str] = Body(default=None, embed=True)): return service.duplicate_deck(deck_id, title)
+@app.post("/api/decks/combine")
+def combine_decks(value: CombineInput): return service.combine_decks(value.deck_ids, value.title, value.persist)
+
+
+@app.get("/api/decks/{deck_id}/cards")
+def cards(deck_id: int, q: str = "", starred: Optional[bool] = None, mastery: Optional[str] = None): return service.list_cards(deck_id, q, starred, mastery)
+@app.post("/api/cards")
+def create_card(value: CardInput): return service.create_card(**value.model_dump())
+@app.post("/api/cards/bulk")
+def create_cards(value: BulkCards): return service.create_flashcards_bulk(value.deck_id, value.cards)
+@app.get("/api/cards/{card_id}")
+def get_card(card_id: int): return service.get_card(card_id)
+@app.patch("/api/cards/{card_id}")
+def update_card(card_id: int, value: CardUpdate): return service.update_card(card_id, **value.model_dump())
+@app.delete("/api/cards/{card_id}")
+def delete_card(card_id: int): return service.delete_card(card_id)
+@app.post("/api/cards/{card_id}/star")
+def star_card(card_id: int, starred: Optional[bool] = Body(default=None, embed=True)): return service.toggle_star(card_id, starred)
+@app.post("/api/decks/{deck_id}/reorder")
+def reorder(deck_id: int, card_ids: List[int] = Body(embed=True)): return service.reorder_cards(deck_id, card_ids)
+@app.get("/api/search")
+def search(q: str = Query(min_length=1), deck_id: Optional[int] = None): return service.search_cards(q, deck_id)
+
+
+@app.get("/api/folders")
+def folders(): return service.list_folders()
+@app.post("/api/folders")
+def create_folder(value: FolderInput): return service.create_folder(value.title, value.description)
+@app.patch("/api/folders/{folder_id}")
+def update_folder(folder_id: int, value: FolderUpdate): return service.update_folder(folder_id, value.title, value.description)
+@app.delete("/api/folders/{folder_id}")
+def delete_folder(folder_id: int): return service.delete_folder(folder_id)
+@app.post("/api/folders/{folder_id}/decks")
+def set_folder_deck(folder_id: int, value: FolderDeckInput): return service.set_folder_deck(folder_id, value.deck_id, value.included)
+
+
+@app.post("/api/sessions")
+def start_session(value: SessionInput): return service.start_session(value.deck_id, value.mode, value.options)
+@app.get("/api/sessions/{session_id}")
+def get_session(session_id: int): return service.get_session(session_id)
+@app.post("/api/sessions/{session_id}/answer")
+def answer_session(session_id: int, value: SessionAnswer): return service.answer_session(session_id, value.response, value.card_id, value.override, value.elapsed_ms)
+@app.post("/api/sessions/{session_id}/override-last")
+def override_last(session_id: int): return service.override_last_answer(session_id)
+@app.post("/api/reviews")
+def record_review(value: ReviewInput): return service.record_review(value.card_id, value.rating, value.session_id)
+@app.get("/api/due")
+def due(deck_id: Optional[int] = None, limit: int = 100): return service.get_due_cards(deck_id, limit)
+
+
+@app.post("/api/tests")
+def create_test(value: QuizInput): return service.generate_quiz(value.deck_id, value.limit, value.types, value.starred_only)
+@app.post("/api/tests/{session_id}/submit")
+def submit_test(session_id: int, value: QuizSubmit): return service.submit_quiz(session_id, value.answers, value.grading)
+@app.get("/api/tests/{session_id}/results")
+def test_results(session_id: int): return service.get_quiz_results(session_id)
+@app.post("/api/match/scores")
+def match_score(value: MatchInput): return service.record_match_score(value.deck_id, value.elapsed_ms, value.mistakes)
+@app.get("/api/decks/{deck_id}/match-scores")
+def match_scores(deck_id: int): return service.get_match_scores(deck_id)
+@app.get("/api/progress")
+def progress(deck_id: Optional[int] = None): return service.get_progress(deck_id)
+@app.get("/api/activity")
+def activity(limit: int = 20): return service.get_recent_activity(limit)
+
+
+@app.post("/api/import/preview")
+def import_preview(value: ImportInput): return service.preview_import(value.payload, value.format, value.term_separator, value.row_separator)
+@app.post("/api/import")
+def import_commit(value: ImportInput): return service.import_deck(value.payload, value.format, value.title, value.term_separator, value.row_separator)
+@app.get("/api/decks/{deck_id}/export")
+def export(deck_id: int, format: str = "json"): return service.export_deck(deck_id, format)
+@app.post("/api/media")
+async def upload_media(file: UploadFile = File(...)):
+    data = await file.read(5 * 1024 * 1024 + 1)
+    return service.save_media(file.filename or "image", file.content_type or "", data)
+@app.get("/api/media/{filename}")
+def media(filename: str):
+    path = MEDIA / Path(filename).name
+    if path.is_file() and path.parent == MEDIA:
+        return FileResponse(str(path))
+    return {"success": False, "error": {"code": "not_found", "message": "Image not found"}}
+@app.get("/api/exports/{filename}")
+def download_export(filename: str):
+    path = EXPORTS / Path(filename).name
+    return FileResponse(str(path), filename=path.name) if path.is_file() and path.parent == EXPORTS else {"success": False, "error": {"code": "not_found", "message": "Export not found"}}
+
+
+app.mount("/assets", StaticFiles(directory=str(STATIC)), name="assets")
+
+
+@app.get("/")
+def index(): return FileResponse(str(STATIC / "index.html"))
+
+
+if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host='127.0.0.1', port=int(os.getenv('STUDY_PORT','8080')))
+    uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("STUDY_PORT", "8080")), access_log=False)
