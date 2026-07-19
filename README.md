@@ -10,7 +10,7 @@ It is an original project inspired by familiar active-recall workflows. It is no
 
 - Deck and card CRUD with a simple autosaving Front/Back row editor, drag ordering, duplication, search, folders, printing, and persistent SQLite storage. Advanced card metadata such as tags, hints, alternate answers, explanations, stars, languages, and local images remains available through the REST API and MCP tools.
 - Flashcards with animated flips, keyboard navigation, touch swipes, shuffle, autoplay, orientation switching, speech synthesis, stars, four review ratings, spaced repetition, and refresh resume.
-- Learn with adaptive ordering, configurable goals, multiple-choice and written prompts, answer direction, three transparent grading levels, missed-card repetition, starred-only sessions, progress saving, and restart resume.
+- Learn with multiple-choice prompts only, adaptive ordering, configurable goals, answer direction, missed-card repetition, starred-only sessions, progress saving, and restart resume.
 - Write with Don't know, immediate corrections, a dependable user grading override, and two-correct mastery.
 - Spell with private browser speech synthesis, replay, slow audio, character-level spelling feedback, and two-correct mastery.
 - Test with configurable size and question types, multiple-choice, generated true/false pairs, written questions, starred-only tests, final submission, scoring, answer review, restart, and printable results.

@@ -16,7 +16,7 @@ The Python suite verifies:
 - migration idempotence and existing-data preservation;
 - deck, card, folder, star, ordering, search, duplication, and combination behavior;
 - strict, moderate, and relaxed grading plus alternate answers and user overrides;
-- adaptive Learn queues, configurable Learn goals, two-correct Write/Spell completion, and session resume;
+- multiple-choice-only adaptive Learn queues, configurable Learn goals, two-correct Write/Spell completion, and session resume;
 - Test distractors, mixed selected formats, generated true/false statements, scoring, and results;
 - spaced-repetition intervals, due cards, mastery, accuracy, study time, streak inputs, most-missed cards, test history, and mode completion;
 - Match score, penalty, personal-best, insufficient-card, and no-mastery-change rules;
@@ -32,7 +32,7 @@ The release candidate was exercised visibly in Chrome through:
 
 - deck creation, edit, star, duplication, and text-import preview/commit;
 - Flashcards flip and review persistence;
-- Learn correct-answer flow and refresh resume;
+- Learn multiple-choice-only flow across consecutive questions and refresh resume;
 - Write correction and “I was correct” override;
 - Spell speech controls and character-level feedback;
 - mixed Test generation, submission, score, and answer review;

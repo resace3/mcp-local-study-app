@@ -106,10 +106,18 @@ def test_visible_modes_resume_and_responsive_layout(browser_app):
         page.goto(browser_app + "#learn/%d" % deck_id)
         page.get_by_role("button", name="Start learn").click()
         expect(page.get_by_role("button", name="← Exit")).to_be_visible()
+        expect(page.locator(".choices")).to_be_visible()
+        assert page.locator("#answer-form").count() == 0
         prompt_before_refresh = page.locator(".question").text_content()
         page.reload()
         expect(page.get_by_role("button", name="← Exit")).to_be_visible()
         assert page.locator(".question").text_content() == prompt_before_refresh
+        expect(page.locator(".choices")).to_be_visible()
+        assert page.locator("#answer-form").count() == 0
+        expected_answer = "Inline answer" if prompt_before_refresh == "Inline term" else prompt_before_refresh.replace("Term ", "Answer ")
+        page.get_by_role("button", name=expected_answer, exact=True).click()
+        expect(page.locator(".choices")).to_be_visible()
+        assert page.locator("#answer-form").count() == 0
 
         page.goto(browser_app + "#write/%d" % deck_id)
         page.get_by_role("button", name="Start write").click()
